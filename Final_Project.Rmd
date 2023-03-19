@@ -1,0 +1,634 @@
+---
+title: "Final Project"
+author: "Team Framingham"
+date: "2022-11-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(devtools)
+install_github("vqv/ggbiplot")
+library(plyr)
+library(ggbiplot)
+library(vtable)
+cb_palette = c("#999999", "#E69F00", "#56B4E9", "#009E73",
+"#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+pal <- c("#000000","#004949","#009292","#ff6db6","#ffb6db",
+ "#490092","#006ddb","#b66dff","#6db6ff","#b6dbff",
+ "#920000","#924900","#db6d00","#24ff24","#ffff6d")
+```
+
+```{r}
+library("GGally")
+library(tidyverse)
+library(broom)
+library(leaps)
+library(patchwork)
+library(mgcv)
+library(glmnet)
+```
+
+
+```{r}
+df = read.csv("framingham.csv")
+```
+
+```{r}
+dim(df)
+```
+
+
+```{r}
+toBinaryMatrix <- function(df){
+m<-c()
+for(i in colnames(df)){
+    x<-sum(is.na(df[,i]))
+    # missing value count
+    m<-append(m,x)
+    
+}
+  
+# adding column and row names to matrix
+a<-matrix(m,nrow=1)
+rownames(a)<-c("Missing")
+colnames(a)<-colnames(df)
+  
+return(a)
+}
+  
+# function call
+binMat = toBinaryMatrix(df)
+binMat
+```
+
+```{r}
+name = colnames(df)[colSums(is.na(df)) > 0]
+values = binMat[binMat>0]
+missing.values = data.frame(name, values)
+```
+
+```{r}
+ggplot(missing.values, aes(x = name, y = values)) +     
+  geom_col(position = 'dodge')+
+  xlab('Attributes') +
+  ylab('# of missing values') +
+  ggtitle("Figure 1: Number of Missing Values")
+```
+
+
+```{r}
+df = na.omit(df)
+dim(df)
+```
+```{r}
+summary(df)
+```
+
+
+```{r}
+st(df)
+```
+
+
+```{r}
+numeric_cols = df[, c("age", "cigsPerDay", "totChol", "sysBP", "diaBP", "BMI", "heartRate", "glucose")]
+categorical = df[, c("male", "education", "currentSmoker", "BPMeds", "prevalentStroke", "prevalentHyp", "diabetes", "TenYearCHD")]
+```
+
+
+```{r}
+numeric_cols1 = numeric_cols[, c("age", "cigsPerDay", "totChol", "sysBP")]
+numeric_cols2 = numeric_cols[, c("diaBP", "BMI", "heartRate", "glucose")]
+```
+
+```{r}
+ggpairs(numeric_cols, progress = FALSE)+ 
+  theme(axis.line=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank())
+```
+```{r}
+ggplot(df, aes(x = factor(TenYearCHD))) +
+  geom_bar(width = 0.35)+ scale_x_discrete(labels =c("Without CHD", "With CHD"))+
+  xlab('Ten year CHD')+
+  ggtitle("Count of the response variable")
+```
+
+
+```{r}
+tbl <- with(df, table(TenYearCHD, currentSmoker))
+ggplot(as.data.frame(tbl), aes(factor(currentSmoker), Freq, fill = TenYearCHD)) +     
+  geom_col(position = 'dodge')+
+  xlab('Current Smoker') +
+  ylab('Frequency') 
+```
+
+
+```{r}
+tbl <- with(df, table(TenYearCHD, prevalentHyp, male))
+ggplot(as.data.frame(tbl), aes(factor(prevalentHyp), Freq, fill = TenYearCHD)) +     
+  geom_col(position = 'dodge')+ facet_wrap(~male, labeller = as_labeller(c(`0` = 'Female', `1` = 'Male'))) +
+  scale_fill_manual(values = cb_palette) + labs(color = 'Ten year CHD')+
+  xlab('Prevalent Hypertension') +
+  ylab('Frequency') +
+  ggtitle('Figure 2: Prevalent Hypertension among Male and Female') 
+```
+
+
+```{r}
+sex.labels = as_labeller("Female","Male")
+ggplot(df, aes(x = age, y = sysBP, colour = factor(TenYearCHD))) +
+  geom_point(data=df[df$TenYearCHD==0,], mapping=aes(x=age, y=sysBP), col="grey", size=2, alpha = 0.2)+
+  geom_point(data=df[df$TenYearCHD==1,], mapping=aes(x=age, y=sysBP), col="orange", size=2, alpha = 0.7)+facet_wrap(~ifelse(male, "Male", "Female"))+
+  ylab('Systolic BP') +
+  xlab('Age') +
+  ggtitle('Figure 2: Systolic Blood Pressure vs Age vs CHD faceted by Gender')+scale_colour_viridis_d()+
+  labs(color ='Ten year CHD')
+```
+
+
+
+```{r}
+tbl <- with(df, table(TenYearCHD, education))
+ggplot(as.data.frame(tbl), aes(factor(education), Freq, fill = TenYearCHD)) +     
+  geom_col(position = 'dodge')+
+  xlab('Education
+       ') +
+  ylab('Frequency') 
+```
+
+```{r}
+tbl <- with(df, table(TenYearCHD, male))
+ggplot(as.data.frame(tbl), aes(factor(male), Freq, fill = TenYearCHD)) +     
+  geom_col(position = 'dodge')+
+  xlab('Male') +
+  ylab('Frequency') 
+```
+
+
+```{r}
+ggplot(df, aes(x = age, y = totChol, colour = factor(TenYearCHD))) +
+  geom_point()+
+  xlab('Age') +
+  ylab('Total Cholestrol') +
+  ggtitle('Age vs Total Cholestrol vs CHD')
+```
+
+```{r}
+ggplot(df, aes(x = heartRate, y = glucose, colour = factor(TenYearCHD))) +
+  geom_point()+
+  xlab('Heart Rate') +
+  ylab('Glucose') +
+  ggtitle('Age vs Total Cholestrol vs CHD')
+```
+
+
+
+
+```{r}
+ggplot(df, aes(x = age, y = sysBP, colour = factor(TenYearCHD))) +
+  geom_point()+
+  xlab('Age') +
+  ylab('Systolic Blood Pressure') +
+  ggtitle('Figure 1: Age vs Systolic Blood Pressure') +
+  scale_color_manual(values = cb_palette) +
+  labs(color = 'Ten year CHD')
+```
+
+
+
+```{r}
+ggplot(df, aes(x = age, y = sysBP, colour = factor(TenYearCHD))) +
+  geom_point()+
+  xlab('Age') +
+  facet_grid(~male, labeller = as_labeller(c(`0` = 'Female', `1` = 'Male')))+
+  ylab('Systolic Blood Pressure') +
+  ggtitle('Figure 3: Age vs Systolic Blood Pressure among Male and Female') +
+  scale_color_manual(values = cb_palette) +
+  labs(color = 'Ten year CHD')
+```
+
+
+
+```{r}
+ggplot(df, aes(x = totChol, y = glucose, colour = factor(TenYearCHD))) +
+  geom_point()+
+  xlab('Total Cholesterol') +
+  ylab('Glucose') +
+  ggtitle('Total Cholesterol vs Glucose') +
+  scale_color_manual(values = cb_palette) +
+  labs(color = 'Ten year CHD')
+```
+
+## Finding important coefficient for our Model
+
+```{r}
+predictors = scale(df[, 1:15])
+```
+
+```{r}
+target = df$TenYearCHD
+```
+
+```{r}
+logit = glm(target ~ predictors, family = 'binomial')
+summary(logit)
+```
+
+
+```{r}
+df.model.tidy = tidy(logit, conf.int = TRUE)
+df.model.tidy[2:16, 1] = names(df)[1:15]
+data.frame(df.model.tidy[,1], round(df.model.tidy[,-1], 2))
+```
+
+
+
+```{r}
+gg = ggplot(df.model.tidy[-1,], aes(x = estimate, y = term,
+xmin = conf.low, xmax = conf.high, color = term)) +
+geom_point() + geom_errorbarh() + geom_vline(xintercept = 0) +
+  ylab('Predictors') + xlab('Coefficients') + scale_color_manual(values = pal) +
+  labs(color = 'Features') + ggtitle('Figure 3: TIE Fighter Plot of Coefficients') + theme(legend.position="none")
+gg
+```
+
+totchol, SysBP, male, glucose, cigsperday, age
+
+### Plotting the important predictors
+```{r}
+important_coef = df.model.tidy[c(2,3,6,11,12,16),]
+```
+
+
+```{r}
+gg = ggplot(important_coef, aes(x = estimate, y = term,
+xmin = conf.low, xmax = conf.high, color = term)) +
+geom_point() + geom_errorbarh() + geom_vline(xintercept = 0) + scale_color_manual(values = pal) +
+  ylab('Predictors') + xlab('Coefficients') + ggtitle('Figue 4: TIE Fighter Plot for the Most Important Coefficients') +
+  labs(color = 'Features') + theme(legend.position="none")
+gg
+```
+
+
+```{r}
+suppressWarnings({
+model.leaps = regsubsets(df$TenYearCHD ~ . - predictors, data = df)
+summary(model.leaps)$which
+})
+
+```
+
+
+Visualizing the important variables
+
+
+```{r}
+g1 = ggplot(df, aes(x = age)) +
+geom_histogram() +
+xlab("Age")
+
+g2 = ggplot(df, aes(x = cigsPerDay)) +
+geom_histogram() +
+xlab("Cig per Day")
+
+g3 = ggplot(df, aes(x = glucose)) +
+geom_histogram() +
+xlab("Glucose")
+
+g4 = ggplot(df, aes(x = sysBP)) +
+geom_histogram() +
+xlab("Systolic Blood Pressure")
+
+
+g1 + g2 + g3 + g4 
+```
+
+```{r}
+ggplot(df, aes(x = age, y = cigsPerDay)) +
+geom_point() + geom_smooth(method = "loess")
+```
+```{r}
+ggplot(df, aes(x = age, y = glucose)) +
+geom_point() + geom_smooth(method = "loess")
+```
+```{r}
+ggplot(df, aes(x = age, y = sysBP)) +
+geom_point() + geom_smooth(method = "loess") +
+  ggtitle('Figure 6: Interaction between Age and Systolic Pressure') +
+  xlab('Age') +
+  ylab('Systolic Blood Pressure')
+```
+
+```{r}
+ggplot(df, aes(x = cigsPerDay, y = glucose)) +
+geom_point() + geom_smooth(method = "loess")
+```
+```{r}
+ggplot(df, aes(x = cigsPerDay, y = sysBP)) +
+geom_point() + geom_smooth(method = "loess")
+```
+
+```{r}
+ggplot(df, aes(x = glucose, y = sysBP)) +
+geom_point() + geom_smooth(method = "loess")
+```
+
+
+totchol, SysBP, male, glucose, cigsperday, age
+
+```{r}
+predictors = data.frame(predictors)
+```
+
+
+
+```{r}
+model = glm(formula = df$TenYearCHD ~ age, family = "binomial", data = predictors)
+AIC(model)
+model = glm(formula = df$TenYearCHD ~ age + cigsPerDay , family = "binomial", data = predictors)
+AIC(model)
+model = glm(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP, family = "binomial", data = predictors)
+AIC(model)
+model = glm(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose, family = "binomial", data = predictors)
+AIC(model)
+model = glm(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose + totChol, family = "binomial", data = predictors)
+AIC(model)
+model = glm(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose + male, family = "binomial", data = predictors)
+AIC(model)
+model = glm(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose + male +  totChol, family = "binomial", data = predictors)
+AIC(model)
+
+```
+
+
+# Adding interaction terms
+
+```{r}
+model = glm(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose + male + totChol + age*sysBP + age*cigsPerDay, family = "binomial", data = predictors)
+AIC(model)
+```
+```{r}
+model = glm(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose + male + totChol + age*sysBP , family = "binomial", data = predictors)
+AIC(model)
+```
+```{r}
+model = glm(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose + male + totChol + age*cigsPerDay, family = "binomial", data = predictors)
+AIC(model)
+```
+
+## Baseline model
+
+```{r}
+baseline_model = glm(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose + male + totChol , family = "binomial", data = predictors)
+AIC(baseline_model)
+```
+
+```{r}
+summary(baseline_model)
+```
+
+```{r}
+summary(predictors)
+```
+
+totchol, SysBP, male, glucose, cigsperday, age, totchol
+
+```{r}
+final_predictors = df[, c('cigsPerDay', 'sysBP', 'male', 'glucose', 'age', 'totChol')]
+trainMean <- apply(final_predictors,2,mean)
+trainSd <- apply(final_predictors,2,sd)
+```
+
+
+```{r}
+grid.df = expand.grid(cigsPerDay = 10, sysBP = 85:295, 
+                       male = rep(c(0,1), each = 3), glucose = 81, age = 57, totChol = 234)
+
+grid.df.scaled<- sweep(sweep(grid.df, 2L, trainMean), 2, trainSd, "/")
+```
+
+
+```{r}
+grid.pred = predict(baseline_model, type = "response", newdata = grid.df.scaled) 
+grid.pred.df = data.frame(grid.df, chd.prob = as.vector(grid.pred))
+```
+
+
+```{r}
+ggplot(grid.pred.df, aes(x = sysBP, y = chd.prob, group = factor(male), color = factor(male))) + geom_line() + scale_color_manual(values = cb_palette,labels = c('Female', 'Male')) + xlab ('Systolic Blood Pressure') + ylab('Predicted Probability') +
+  ggtitle('Figure 7: Predicted Probabilities using Logistic Regression Model') + labs(color = 'Gender')
+```
+
+
+
+```{r}
+grid.df = expand.grid(cigsPerDay = 10, sysBP = 85:295, 
+                       male = 0:1, glucose = 81, age = c(40,50,60,70), totChol = 234)
+
+grid.df.scaled<- sweep(sweep(grid.df, 2L, trainMean), 2, trainSd, "/")
+```
+
+
+```{r}
+grid.pred = predict(baseline_model, type = "response", newdata = grid.df.scaled) 
+grid.pred.df = data.frame(grid.df, chd.prob = as.vector(grid.pred))
+```
+
+
+```{r}
+ggplot(grid.pred.df, aes(x = sysBP, y = chd.prob, group = factor(male), color = factor(male))) + geom_line() + scale_color_manual(values = cb_palette,labels = c('Female', 'Male')) + xlab ('Systolic Blood Pressure') + ylab('Predicted Probability') + facet_wrap(~age, nrow = 1, labeller = as_labeller(c(`40` = 'Age 40', `50` = 'Age 50',`60` = 'Age 60', `70` = 'Age 70'))) +
+  ggtitle('Figure 5: Predicted Probabilities using Logistic Regression Model') + labs(color = 'Gender')
+```
+
+
+Fitted vs Residual
+```{r}
+switch.model.df = predictors
+switch.model.df$.fitted = fitted.values(baseline_model)
+switch.model.df$.resid = residuals(baseline_model, type = "response")
+ggplot(switch.model.df, aes(x = .fitted, y = .resid)) +
+geom_point() +
+geom_smooth(method = "loess", method.args = list(degree = 1)) +
+xlab("Fitted values") + ylab("Residuals") +
+  ggtitle('Figure 6: Fitted vs Residual Plot for Baseline Model')
+```
+
+## GAM
+
+```{r}
+model = gam(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose + male + totChol, data = predictors, family = binomial, method = 'REML')
+AIC(model)
+```
+
+
+```{r}
+model = gam(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose + male + totChol+ age*sysBP, data = predictors, family = binomial, method = 'REML')
+AIC(model)
+```
+
+
+```{r}
+model = gam(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose + male + age*sysBP + age*cigsPerDay + totChol, data = predictors, family = "binomial", method = 'REML')
+AIC(model)
+```
+
+
+## With smoothing term
+
+```{r}
+model = gam(formula = df$TenYearCHD ~ s(age) + cigsPerDay + sysBP + glucose + male + age*sysBP + totChol, data = predictors, family = "binomial", method = 'REML')
+AIC(model)
+```
+
+
+```{r}
+model = gam(formula = df$TenYearCHD ~ s(age) + cigsPerDay + sysBP + glucose + male + age*sysBP + age*cigsPerDay + totChol, data = predictors, family = "binomial", method = 'REML')
+AIC(model)
+```
+
+```{r}
+model = gam(formula = df$TenYearCHD ~ age + cigsPerDay + sysBP + glucose + male + age*sysBP + age*cigsPerDay + s(totChol), data = predictors, family = "binomial", method = 'REML')
+AIC(model)
+```
+
+Final
+
+
+```{r}
+model = gam(formula = df$TenYearCHD ~ s(age, sysBP) + cigsPerDay + glucose + male + totChol, data = predictors, family = "binomial", method = 'REML')
+AIC(model)
+```
+
+```{r}
+summary(model)
+```
+
+
+```{r}
+grid.df = expand.grid(cigsPerDay = 10, sysBP = 85:295, 
+                       male = 0:1, glucose = 81, age = c(40,50,60,70), totChol = 234)
+
+grid.df.scaled<- sweep(sweep(grid.df, 2L, trainMean), 2, trainSd, "/")
+```
+
+
+```{r}
+grid.pred = predict(model, type = "response", newdata = grid.df.scaled) 
+grid.pred.df = data.frame(grid.df, chd.prob = as.vector(grid.pred))
+```
+
+
+```{r}
+ggplot(grid.pred.df, aes(x = sysBP, y = chd.prob, group = factor(male), color = factor(male))) + geom_line() + scale_color_manual(values = cb_palette,labels = c('Female', 'Male')) + xlab ('Systolic Blood Pressure') + ylab('Predicted Probability') + facet_wrap(~age, nrow = 1, labeller = as_labeller(c(`40` = 'Age 40', `50` = 'Age 50',`60` = 'Age 60', `70` = 'Age 70'))) +
+  ggtitle('Figure 7: Predicted Probabilities using GAM Model') + labs(color = 'Gender')
+```
+
+
+Fitted vs Residual
+```{r}
+aug_model_df = augment(model, type.residuals = "response")
+ggplot(aug_model_df, aes(x = .fitted, y = .resid)) +
+    geom_point() +
+    geom_smooth(method = "loess", method.args = list(degree = 1)) +
+    xlab("Fitted values") +
+    ylab("Residuals") + 
+  ggtitle('Figure 8: Fitted vs Residual Plot for GAM Model')
+  
+```
+## PCA
+
+```{r}
+df.pca = prcomp(df, scale. = TRUE)
+```
+
+```{r}
+ggbiplot(df.pca, obs.scale = 1, var.axes = FALSE) +
+xlim(-5, 5) + ylim(-5, 5)
+```
+```{r}
+chd = df$TenYearCHD
+chd[chd == 0] = "No"
+chd[chd == 1] = "Yes"
+chd = factor(chd, levels = c("No", "Yes"))
+```
+
+
+```{r}
+ggbiplot(df.pca, obs.scale = 1,
+var.axes = FALSE, group = chd) + scale_color_manual(values = cb_palette) +
+  ggtitle('Figure 9: PCA of 2 Important Components (explains 32.5% variance)') +  labs(color = 'Ten year CHD')
+```
+
+```{r}
+ggbiplot(df.pca, obs.scale = 1,group = chd) + scale_color_manual(values = cb_palette)
+```
+
+
+
+# Lasso
+
+
+```{r}
+predictors = scale(df[, 1:15])
+```
+
+```{r}
+set.seed(123) 
+cv.lasso <- cv.glmnet(predictors, df$TenYearCHD, alpha = 1, family = "binomial")
+# Fit the final model on the training data
+model <- glmnet(predictors, df$TenYearCHD, alpha = 1, family = "binomial",
+                lambda = cv.lasso$lambda.min)
+# Display regression coefficients
+coef(model)
+```
+
+
+
+```{r}
+plot(cv.lasso)
+```
+
+
+
+```{r}
+cv.lasso$lambda.min
+```
+
+
+
+```{r}
+coef(cv.lasso, cv.lasso$lambda.min)
+```
+
+
+```{r}
+coef(cv.lasso, cv.lasso$lambda.1se)
+```
+
+
+
+```{r}
+lasso.model <- glmnet(predictors, df$TenYearCHD, alpha = 1, family = "binomial",
+                      lambda = cv.lasso$lambda.1se)
+```
+
+
+```{r}
+coef(lasso.model)
+```
+
+
+```{r}
+lasso.model
+```
+
+
+
+
+
+
+
+
